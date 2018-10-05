@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ser.FilterProvider;
 import com.fasterxml.jackson.databind.ser.impl.SimpleFilterProvider;
 import com.github.bohnman.squiggly.context.provider.SimpleSquigglyContextProvider;
 import com.github.bohnman.squiggly.context.provider.SquigglyContextProvider;
+import com.github.bohnman.squiggly.expandable.ExpandableMixin;
 import com.github.bohnman.squiggly.filter.SquigglyPropertyFilter;
 import com.github.bohnman.squiggly.filter.SquigglyPropertyFilterMixin;
 import com.github.bohnman.squiggly.parser.SquigglyParser;
@@ -88,7 +89,7 @@ public class Squiggly {
 
         simpleFilterProvider.addFilter(SquigglyPropertyFilter.FILTER_ID, filter);
         mapper.addMixIn(Object.class, SquigglyPropertyFilterMixin.class);
-
+        mapper.addMixIn(Object.class, ExpandableMixin.class);
         return mapper;
     }
 
