@@ -40,7 +40,6 @@ public abstract class AbstractSquigglyContextProvider implements SquigglyContext
      */
     protected abstract String getFilter(Class beanClass);
 
-
     @Override
     public void serializeAsIncludedField(Object pojo, JsonGenerator jgen, SerializerProvider provider, PropertyWriter writer) throws Exception {
         writer.serializeAsField(pojo, jgen, provider);
@@ -48,6 +47,16 @@ public abstract class AbstractSquigglyContextProvider implements SquigglyContext
 
     @Override
     public void serializeAsExcludedField(Object pojo, JsonGenerator jgen, SerializerProvider provider, PropertyWriter writer) throws Exception {
+        writer.serializeAsOmittedField(pojo, jgen, provider);
+    }
+
+    @Override
+    public void serializeAsPlaceHolder(Object pojo, JsonGenerator jgen, SerializerProvider provider, PropertyWriter writer) throws Exception {
+        writer.serializeAsPlaceholder(pojo, jgen, provider);
+    }
+
+    @Override
+    public void serializeAsOmmited(Object pojo, JsonGenerator jgen, SerializerProvider provider, PropertyWriter writer) throws Exception {
         writer.serializeAsOmittedField(pojo, jgen, provider);
     }
 }

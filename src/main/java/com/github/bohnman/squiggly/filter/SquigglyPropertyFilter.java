@@ -11,6 +11,8 @@ import com.github.bohnman.squiggly.bean.BeanInfoIntrospector;
 import com.github.bohnman.squiggly.config.SquigglyConfig;
 import com.github.bohnman.squiggly.context.SquigglyContext;
 import com.github.bohnman.squiggly.context.provider.SquigglyContextProvider;
+import com.github.bohnman.squiggly.expandable.Expandable;
+import com.github.bohnman.squiggly.expandable.ExpandableProperty;
 import com.github.bohnman.squiggly.metric.source.GuavaCacheSquigglyMetricsSource;
 import com.github.bohnman.squiggly.metric.source.SquigglyMetricsSource;
 import com.github.bohnman.squiggly.name.AnyDeepName;
@@ -23,11 +25,8 @@ import com.google.common.collect.Sets;
 import net.jcip.annotations.ThreadSafe;
 import org.apache.commons.lang3.tuple.Pair;
 
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.lang.reflect.Field;
+import java.util.*;
 
 
 /**
@@ -85,6 +84,7 @@ public class SquigglyPropertyFilter extends SimpleBeanPropertyFilter {
 
     private final BeanInfoIntrospector beanInfoIntrospector;
     private final SquigglyContextProvider contextProvider;
+    private final SquigglyContextProvider expandableContextProvider;
 
     /**
      * Construct with a specified context provider.
@@ -92,7 +92,12 @@ public class SquigglyPropertyFilter extends SimpleBeanPropertyFilter {
      * @param contextProvider context provider
      */
     public SquigglyPropertyFilter(SquigglyContextProvider contextProvider) {
-        this(contextProvider, new BeanInfoIntrospector());
+        this(contextProvider, null, new BeanInfoIntrospector());
+    }
+
+    public SquigglyPropertyFilter(SquigglyContextProvider contextProvider,
+                                  SquigglyContextProvider expandableContextProvider) {
+        this(contextProvider, expandableContextProvider, new BeanInfoIntrospector());
     }
 
     /**
@@ -101,8 +106,11 @@ public class SquigglyPropertyFilter extends SimpleBeanPropertyFilter {
      * @param contextProvider          context provider
      * @param beanInfoIntrospector introspector
      */
-    public SquigglyPropertyFilter(SquigglyContextProvider contextProvider, BeanInfoIntrospector beanInfoIntrospector) {
+    public SquigglyPropertyFilter(SquigglyContextProvider contextProvider,
+                                  SquigglyContextProvider expandableContextProvider,
+                                  BeanInfoIntrospector beanInfoIntrospector) {
         this.contextProvider = contextProvider;
+        this.expandableContextProvider = expandableContextProvider;
         this.beanInfoIntrospector = beanInfoIntrospector;
     }
 
@@ -155,7 +163,6 @@ public class SquigglyPropertyFilter extends SimpleBeanPropertyFilter {
         SquigglyContext context = contextProvider.getContext(path.getFirst().getBeanClass());
         String filter = context.getFilter();
 
-
         if (AnyDeepName.ID.equals(filter)) {
             return true;
         }
@@ -166,19 +173,40 @@ public class SquigglyPropertyFilter extends SimpleBeanPropertyFilter {
             Boolean match = MATCH_CACHE.getIfPresent(pair);
 
             if (match == null) {
-                match = pathMatches(path, context);
+                match = pathMatches(path, context.getNodes());
             }
 
             MATCH_CACHE.put(pair, match);
             return match;
         }
 
-        return pathMatches(path, context);
+        return pathMatches(path, context.getNodes());
+    }
+
+    protected boolean hidden(PropertyWriter writer, JsonGenerator jgen) {
+        if (!expandableContextProvider.isFilteringEnabled()) {
+            return false;
+        }
+
+        JsonStreamContext streamContext = getStreamContext(jgen);
+
+        if (streamContext == null) {
+            return false;
+        }
+
+        Path path = getPath(writer, streamContext);
+        SquigglyContext context = expandableContextProvider.getContext(path.getFirst().getBeanClass());
+        String filter = context.getFilter();
+
+        if (AnyDeepName.ID.equals(filter)) {
+            return false;
+        }
+
+        return expandableMatching(path, context.getNodes());
     }
 
     // perform the actual matching
-    private boolean pathMatches(Path path, SquigglyContext context) {
-        List<SquigglyNode> nodes = context.getNodes();
+    private boolean pathMatches(Path path, List<SquigglyNode> nodes) {
         Set<String> viewStack = null;
         SquigglyNode viewNode = null;
 
@@ -240,6 +268,75 @@ public class SquigglyPropertyFilter extends SimpleBeanPropertyFilter {
 
         return true;
     }
+
+  private boolean expandableMatching(Path path, List<SquigglyNode> nodes) {
+    Set<String> viewStack = null;
+    SquigglyNode viewNode = null;
+
+    int pathSize = path.getElements().size();
+    int lastIdx = pathSize - 1;
+
+    for (int i = 0; i < pathSize; i++) {
+      PathElement element = path.getElements().get(i);
+
+      if (viewNode != null && !viewNode.isSquiggly()) {
+        Class beanClass = element.getBeanClass();
+
+        if (beanClass != null && !Map.class.isAssignableFrom(beanClass)) {
+          Set<String> propertyNames = getPropertyNamesFromViewStack(element, viewStack);
+
+          if (!propertyNames.contains(element.getName())) {
+            return false;
+          }
+
+          if(!element.isExpandable()){
+            return false;
+          }
+        }
+
+      } else if (nodes.isEmpty() && element.isExpandable()) {
+        return true;
+      } else if (nodes.isEmpty()) {
+        return false;
+      } else {
+
+        SquigglyNode match = findBestSimpleNode(element, nodes);
+
+        if (match == null) {
+          match = findBestViewNode(element, nodes);
+
+          if (match != null) {
+            viewNode = match;
+            viewStack = addToViewStack(viewStack, viewNode);
+          }
+        } else if (match.isAnyShallow()) {
+          viewNode = match;
+        } else if (match.isAnyDeep() && element.isExpandable()) {
+          return false;
+        }
+
+        if (match == null) {
+          if (isJsonUnwrapped(element)) {
+            continue;
+          }
+
+          return element.isExpandable();
+        }
+
+        if (match.isNegated()) {
+          return false;
+        }
+
+        nodes = match.getChildren();
+
+        if (i < lastIdx && nodes.isEmpty() && !match.isEmptyNested() && SquigglyConfig.isFilterImplicitlyIncludeBaseFields()) {
+          nodes = BASE_VIEW_NODES;
+        }
+      }
+    }
+
+    return false;
+  }
 
     private boolean isJsonUnwrapped(PathElement element) {
         BeanInfo info = beanInfoIntrospector.introspect(element.getBeanClass());
@@ -336,6 +433,10 @@ public class SquigglyPropertyFilter extends SimpleBeanPropertyFilter {
     public void serializeAsField(final Object pojo, final JsonGenerator jgen, final SerializerProvider provider,
                                  final PropertyWriter writer) throws Exception {
         if (include(writer, jgen)) {
+            if(hidden(writer, jgen)){
+              contextProvider.serializeAsOmmited(pojo, jgen, provider, writer);
+              return;
+            }
             contextProvider.serializeAsIncludedField(pojo, jgen, provider, writer);
         } else if (!jgen.canOmitFields()) {
             contextProvider.serializeAsExcludedField(pojo, jgen, provider, writer);
@@ -373,6 +474,10 @@ public class SquigglyPropertyFilter extends SimpleBeanPropertyFilter {
 
         public String getId() {
             return id;
+        }
+
+        public Optional<PathElement> getElement(final String element) {
+          return elements.stream().filter(pathElement -> element.equals(pathElement.name)).findFirst();
         }
 
         public List<PathElement> getElements() {
@@ -439,5 +544,15 @@ public class SquigglyPropertyFilter extends SimpleBeanPropertyFilter {
         public Class getBeanClass() {
             return bean;
         }
+
+        public boolean isExpandable() {
+          try {
+            Set<String> expandables = Objects.requireNonNull(ExpandableProperty.findExpandables(getBeanClass()));
+            return expandables.contains(name);
+          } catch (Exception ex) {
+            return false;
+          }
+        }
+
     }
 }

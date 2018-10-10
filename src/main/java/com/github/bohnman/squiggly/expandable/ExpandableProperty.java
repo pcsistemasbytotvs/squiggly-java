@@ -19,14 +19,14 @@ public class ExpandableProperty extends VirtualBeanPropertyWriter {
   }
 
   public ExpandableProperty(BeanPropertyDefinition propDef, Annotations contextAnnotations,
-                            JavaType declaredType) {
+      JavaType declaredType) {
     super(propDef, contextAnnotations, declaredType);
   }
 
   @Override
   protected Object value(Object bean, JsonGenerator jgen, SerializerProvider prov)
       throws Exception {
-    return findExpandables(bean.getClass());
+    return ExpandableProperty.findExpandables(bean.getClass());
   }
 
   @Override
@@ -35,7 +35,7 @@ public class ExpandableProperty extends VirtualBeanPropertyWriter {
     return new ExpandableProperty(propDef, null, type);
   }
 
-  private Set<String> findExpandables(Class<?> target) {
+  public static Set<String> findExpandables(Class<?> target) {
     Set<String> expandables = new HashSet<>();
 
     for (Field field : target.getDeclaredFields()) {
@@ -45,6 +45,6 @@ public class ExpandableProperty extends VirtualBeanPropertyWriter {
       }
     }
 
-    return expandables;
+    return expandables.isEmpty() ? null : expandables;
   }
 }

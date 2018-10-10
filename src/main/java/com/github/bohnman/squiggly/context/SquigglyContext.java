@@ -30,4 +30,5 @@ public interface SquigglyContext {
      * @return filter expression
      */
     String getFilter();
+
 }
