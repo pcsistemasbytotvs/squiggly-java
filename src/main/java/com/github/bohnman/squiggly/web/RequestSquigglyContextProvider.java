@@ -48,6 +48,7 @@ public class RequestSquigglyContextProvider extends AbstractSquigglyContextProvi
         return filter;
     }
 
+
     @Override
     public boolean isFilteringEnabled() {
         HttpServletRequest request = getRequest();

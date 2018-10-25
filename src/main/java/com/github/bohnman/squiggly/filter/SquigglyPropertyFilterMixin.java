@@ -1,6 +1,9 @@
 package com.github.bohnman.squiggly.filter;
 
 import com.fasterxml.jackson.annotation.JsonFilter;
+
+import com.fasterxml.jackson.databind.annotation.JsonAppend;
+import com.github.bohnman.squiggly.expandable.ExpandableProperty;
 import net.jcip.annotations.ThreadSafe;
 
 /**
@@ -8,5 +11,10 @@ import net.jcip.annotations.ThreadSafe;
  */
 @ThreadSafe
 @JsonFilter(SquigglyPropertyFilter.FILTER_ID)
+@JsonAppend(
+    prepend = true,
+    props = {
+        @JsonAppend.Prop(name = "_expandables", value = ExpandableProperty.class)
+    })
 public class SquigglyPropertyFilterMixin {
 }

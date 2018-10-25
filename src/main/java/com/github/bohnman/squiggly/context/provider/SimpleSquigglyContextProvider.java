@@ -21,13 +21,9 @@ public class SimpleSquigglyContextProvider extends AbstractSquigglyContextProvid
         if (filter == null) {
             return false;
         }
-
-        if ("**".equals(filter)) {
-            return false;
-        }
-
-        return true;
+        return !"**".equals(filter);
     }
+
 
     @Override
     protected String getFilter(Class beanClass) {
