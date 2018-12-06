@@ -184,7 +184,7 @@ public class SquigglyPropertyFilter extends SimpleBeanPropertyFilter {
     }
 
     protected boolean hidden(PropertyWriter writer, JsonGenerator jgen) {
-        if (!expandableContextProvider.isFilteringEnabled()) {
+        if (expandableContextProvider == null || !expandableContextProvider.isFilteringEnabled()) {
             return false;
         }
 
