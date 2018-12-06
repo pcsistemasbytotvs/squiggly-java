@@ -37,8 +37,10 @@ public class LazySquigglyContext implements SquigglyContext {
         return nodes;
     }
 
+
     @Override
     public String getFilter() {
         return filter;
     }
+
 }

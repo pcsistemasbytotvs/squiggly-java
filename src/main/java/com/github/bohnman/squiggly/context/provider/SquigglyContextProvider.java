@@ -31,4 +31,11 @@ public interface SquigglyContextProvider {
 
     // Hook method for custom excluded serialization
     void serializeAsExcludedField(Object pojo, JsonGenerator jgen, SerializerProvider provider, PropertyWriter writer) throws Exception;
+
+    // Hook method for custom placeholder serialization
+    void serializeAsPlaceHolder(Object pojo, JsonGenerator jgen, SerializerProvider provider, PropertyWriter writer) throws Exception;
+
+    // Hook Method for a custom omitted serialization
+    void serializeAsOmmited(Object pojo, JsonGenerator jgen, SerializerProvider provider, PropertyWriter writer) throws Exception;
+
 }
